@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pond Fishing – One Key</title>
+<style>
+  :root {
+    --w: 720px;
+    --h: 360px;
+    --pond: #b7ddff;
+    --water: #a3d2ff;
+    --shore: #8bd17c;
+    --ui: #1f2a44;
+    --accent: #2b73ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: linear-gradient(#f7fbff, #eef5ff);
+    color: var(--ui);
+  }
+  .wrap { width: min(95vw, var(--w)); }
+  h1 { margin: 0 0 8px; font-size: 20px; text-align: center; }
+  .hud {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 6px 0 10px; font-size: 14px;
+  }
+  .pill { padding: 4px 10px; border: 1px solid #d7e2ff; border-radius: 999px; }
+  .game {
+    position: relative; width: 100%; height: var(--h); overflow: hidden;
+    border: 2px solid #e0e7ff; border-radius: 14px; background: var(--pond);
+    user-select: none; touch-action: manipulation;
+  }
+  /* scenery */
+  .shore { position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: var(--shore); }
+  .water {
+    position: absolute; left: 0; right: 0; bottom: 60px; top: 0;
+    background: repeating-linear-gradient(
+      180deg, var(--water), var(--water) 8px, rgba(255,255,255,0.25) 8px, rgba(255,255,255,0.25) 9px
+    );
+  }
+  .cloud { position: absolute; top: 12px; font-size: 24px; opacity: .6; }
+  .cloud:nth-child(1){ left: 80px } .cloud:nth-child(2){ left: 300px } .cloud:nth-child(3){ left: 520px }
+
+  /* player and gear */
+  .player { position: absolute; bottom: 65px; left: 20px; font-size: 34px; }
+  .rod { position: absolute; bottom: 110px; left: 60px; width: 130px; height: 60px; pointer-events: none; }
+  .line {
+    position: absolute; left: 170px; top: 20px; width: 2px; height: 0px;
+    background: #1b4aff; transform-origin: top; border-radius: 2px;
+  }
+  .bobber {
+    position: absolute; left: 165px; top: 20px; width: 12px; height: 12px;
+    border-radius: 50%; background: white; border: 2px solid #ff5964;
+  }
+  .hook {
+    position: absolute; left: 165px; top: 32px; font-size: 18px; pointer-events: none;
+  }
+
+  /* fish */
+  .fish {
+    position: absolute; font-size: 26px; line-height: 1;
+    transform: translateZ(0);
+    filter: drop-shadow(0 1px 0 rgba(0,0,0,.15));
+  }
+
+  .msg {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    background: rgba(255,255,255,.65); backdrop-filter: blur(2px);
+    font-weight: 700; font-size: 18px; padding: 18px;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .msg.show { opacity: 1; pointer-events: auto; }
+  .hint { text-align: center; font-size: 13px; opacity: .75; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎣 Pond Fishing — Spacebar Only</h1>
+    <div class="hud">
+      <div class="pill">Score: <span id="score">0</span></div>
+      <div class="pill">Misses: <span id="misses">0</span> / 5</div>
+      <div class="pill">Best: <span id="best">0</span></div>
+    </div>
+
+    <div id="game" class="game" aria-label="Pond Fishing Game" tabindex="0">
+      <!-- sky extras -->
+      <div class="cloud">☁️</div><div class="cloud" style="left: 340px">☁️</div><div class="cloud" style="left: 560px">☁️</div>
+
+      <!-- scenery layers -->
+      <div class="water"></div>
+      <div class="shore"></div>
+
+      <!-- player -->
+      <div class="player" id="player" role="img" aria-label="Fisher">🧑‍🦰</div>
+      <svg class="rod" viewBox="0 0 130 60" aria-hidden="true">
+        <path d="M0,40 C40,20 90,0 130,10" stroke="#7b5b3e" stroke-width="6" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div id="line" class="line"></div>
+      <div id="bobber" class="bobber"></div>
+      <div id="hook" class="hook">🪝</div>
+
+      <!-- overlay message -->
+      <div id="overlay" class="msg show">
+        <div>
+          <div style="font-size:24px;margin-bottom:6px">Press Space to Cast</div>
+          Catch fish 🐟 by dropping the hook when they pass. Miss 5 times and the pond judges you.
+          <div style="margin-top:8px;font-weight:600;color:var(--accent)">Space = Cast. Space again when ready to restart.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hint">Space to cast. Hook drops and returns automatically. Time it so it intersects a fish.</div>
+  </div>
+
+<script>
+  // Elements
+  const gameEl   = document.getElementById('game');
+  const overlay  = document.getElementById('overlay');
+  const lineEl   = document.getElementById('line');
+  const bobberEl = document.getElementById('bobber');
+  const hookEl   = document.getElementById('hook');
+  const scoreEl  = document.getElementById('score');
+  const missesEl = document.getElementById('misses');
+  const bestEl   = document.getElementById('best');
+
+  // Game state
+  const H = 360, shoreH = 60, waterTop = 0, waterBottom = H - shoreH;
+  const hookX = 170; // fixed x where line/hook are
+  let running = false, raf = 0, tPrev = 0;
+  let score = 0, misses = 0, best = +localStorage.pondFishBest || 0;
+  bestEl.textContent = best;
+
+  // Hook motion
+  let hookY = 24;        // top origin
+  let hookState = 'idle';// 'idle' | 'down' | 'up' | 'cooldown'
+  let hookSpeed = 420;   // px/sec
+  const minDepth = 40;   // start below UI
+  const maxDepth = waterBottom - 16;
+
+  // Fish list
+  let fishes = [];
+
+  function reset() {
+    cancelAnimationFrame(raf);
+    fishes.forEach(f => f.el.remove());
+    fishes = [];
+    hookY = minDepth;
+    setHookY(minDepth);
+    setLineLength(hookY);
+    score = 0; misses = 0;
+    scoreEl.textContent = '0';
+    missesEl.textContent = '0';
+    hookState = 'idle';
+  }
+
+  function start() {
+    if (running) return;
+    reset();
+    running = true;
+    overlay.classList.remove('show');
+    spawnTimer = 0.2;
+    tPrev = performance.now();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function end() {
+    running = false;
+    best = Math.max(best, score);
+    localStorage.pondFishBest = best;
+    bestEl.textContent = best;
+    overlay.innerHTML = `<div>
+      <div style="font-size:24px;margin-bottom:6px">Game Over</div>
+      Score: <b>${score}</b> &nbsp; • &nbsp; Best: <b>${best}</b><br/>
+      Press Space to fish again. Maybe look at the pond this time.
+    </div>`;
+    overlay.classList.add('show');
+    cancelAnimationFrame(raf);
+  }
+
+  // Hook helpers
+  function setHookY(y) {
+    hookEl.style.top = y + 'px';
+    bobberEl.style.top = (y - 12) + 'px';
+  }
+  function setLineLength(y) {
+    const len = Math.max(0, y - 20);
+    lineEl.style.height = len + 'px';
+  }
+
+  // Fish spawner
+  let spawnTimer = 0;
+  function spawnFish() {
+    const el = document.createElement('div');
+    el.className = 'fish';
+    // 50/50 swim direction, pick x accordingly
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const emojiList = ['🐟','🐠','🐡'];
+    el.textContent = emojiList[Math.floor(Math.random() * emojiList.length)];
+    const y = rand(minDepth + 16, waterBottom - 10);
+    const speed = rand(80, 140) * (dir === 1 ? 1 : -1);
+
+    // start at left or right edge
+    const startX = dir === 1 ? -30 : gameEl.clientWidth + 30;
+    el.style.left = startX + 'px';
+    el.style.top  = y + 'px';
+    gameEl.appendChild(el);
+
+    fishes.push({ el, x: startX, y, w: 26, h: 20, vx: speed });
+  }
+
+  function rand(a, b){ return Math.random() * (b - a) + a }
+
+  // Main loop
+  function loop(tNow) {
+    const dt = Math.min(0.033, (tNow - tPrev) / 1000);
+    tPrev = tNow;
+
+    // Spawn fish
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnFish();
+      // slightly accelerate spawns with score
+      spawnTimer = Math.max(0.6, 1.3 - score * 0.02) * (0.6 + Math.random() * 0.8);
+    }
+
+    // Move fish
+    const remove = [];
+    for (let i = 0; i < fishes.length; i++) {
+      const f = fishes[i];
+      f.x += f.vx * dt;
+      f.el.style.left = f.x + 'px';
+
+      const outLeft  = f.x < -40 && f.vx < 0;
+      const outRight = f.x > gameEl.clientWidth + 40 && f.vx > 0;
+      if (outLeft || outRight) remove.push(i);
+    }
+    // Clean up offscreen fish
+    for (let i = remove.length - 1; i >= 0; i--) {
+      const idx = remove[i];
+      fishes[idx].el.remove();
+      fishes.splice(idx, 1);
+    }
+
+    // Update hook motion
+    if (hookState === 'down') {
+      hookY += hookSpeed * dt;
+      if (hookY >= maxDepth) { hookY = maxDepth; hookState = 'up'; }
+      setHookY(hookY); setLineLength(hookY);
+    } else if (hookState === 'up') {
+      hookY -= hookSpeed * dt;
+      if (hookY <= minDepth) { hookY = minDepth; hookState = 'cooldown'; cooldownT = 0.18; }
+      setHookY(hookY); setLineLength(hookY);
+    } else if (hookState === 'cooldown') {
+      cooldownT -= dt;
+      if (cooldownT <= 0) hookState = 'idle';
+    }
+
+    // Collision: simple AABB vs hook point
+    const hookRect = { x: hookX, y: hookY, r: 10 };
+    for (let i = fishes.length - 1; i >= 0; i--) {
+      const f = fishes[i];
+      if (Math.abs((f.x + f.w/2) - hookRect.x) < (f.w/2 + hookRect.r) &&
+          Math.abs((f.y + f.h/2) - hookRect.y) < (f.h/2 + hookRect.r)) {
+        // Caught
+        pop(f.el);
+        fishes.splice(i, 1);
+        score += 1;
+        scoreEl.textContent = score;
+        // small difficulty ramp
+        hookSpeed = Math.min(560, hookSpeed + 6);
+      }
+    }
+
+    if (misses >= 5) { end(); return; }
+    raf = requestAnimationFrame(loop);
+  }
+
+  // Tiny celebratory pop
+  function pop(el) {
+    el.textContent = '✨';
+    el.style.transition = 'transform .25s ease, opacity .25s ease';
+    el.style.transform = 'translateY(-12px) scale(1.1)';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 250);
+  }
+
+  // Input: SPACE to cast, and SPACE to restart when ended
+  let cooldownT = 0;
+  function cast() {
+    if (!running) { start(); return; }
+    if (hookState !== 'idle') {
+      // bad cast counts as a miss only when hook is moving
+      if (hookState === 'down' || hookState === 'up') {
+        misses += 1; missesEl.textContent = misses;
+      }
+      return;
+    }
+    hookState = 'down';
+  }
+
+  // Controls
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      cast();
+    }
+  });
+  // Tap/click also allowed, still one action
+  gameEl.addEventListener('pointerdown', cast);
+
+  // Initialize visuals
+  setHookY(minDepth); setLineLength(minDepth);
+</script>
+</body>
+</html>
