@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adaptive Workout Plan Generator</title>
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#111831; --ink:#e8eefc; --muted:#a9b2ca; --accent:#7c9cff; --accent-2:#39d98a; --danger:#ff7a7a;
+      --card:#0f152a; --chip:#1a2142; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    [data-theme="light"]{
+      --bg:#f6f8ff; --panel:#ffffff; --ink:#0f152a; --muted:#52607a; --accent:#3b6cff; --accent-2:#17a46a; --danger:#d64b4b;
+      --card:#ffffff; --chip:#eef2ff; --shadow:0 10px 30px rgba(16,24,72,.10);
+    }
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,var(--bg),#0a0f2b);color:var(--ink);font:16px/1.5 Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1100px;margin:32px auto;padding:0 20px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:clamp(22px,3vw,32px);letter-spacing:.3px;margin:0}
+    .tag{background:var(--chip);color:var(--ink);padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08)}
+    .panel{background:var(--panel);border:1px solid rgba(255,255,255,.06);box-shadow:var(--shadow);border-radius:16px}
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+    @media (max-width:980px){.grid{grid-template-columns:1fr}}
+
+    form{padding:16px;display:grid;gap:12px}
+    fieldset{border:1px dashed rgba(255,255,255,.12);border-radius:12px;padding:12px}
+    legend{font-size:13px;color:var(--muted);padding:0 6px}
+    label{font-weight:600;font-size:13px;color:var(--muted)}
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+    .col-6{grid-column:span 6}
+    .col-4{grid-column:span 4}
+    .col-3{grid-column:span 3}
+    .col-8{grid-column:span 8}
+    .col-12{grid-column:span 12}
+    input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:var(--card);color:var(--ink)}
+    .inline{display:flex;gap:10px;flex-wrap:wrap}
+    .chip{background:var(--chip);border:1px solid rgba(255,255,255,.08);padding:8px 10px;border-radius:12px;display:inline-flex;gap:6px;align-items:center}
+    .chip input{width:auto;accent-color:var(--accent)}
+    .btn{cursor:pointer;border:none;background:linear-gradient(135deg,var(--accent),#5eb2ff);color:#fff;padding:12px 14px;border-radius:12px;font-weight:700;box-shadow:0 6px 16px rgba(75,116,255,.35)}
+    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.18);color:var(--ink)}
+    .btn-row{display:flex;gap:10px;flex-wrap:wrap}
+    .hint{font-size:12px;color:var(--muted)}
+
+    /* Output */
+    #output{padding:16px}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    @media (max-width:700px){.summary{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px}
+    .card h3{margin:0 0 8px;font-size:16px}
+    .day{border-left:4px solid var(--accent);padding-left:10px;margin:16px 0}
+    .ex{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.1)}
+    .ex:last-child{border-bottom:none}
+    .badge{padding:2px 8px;border-radius:999px;background:var(--chip);font-size:11px}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--chip);padding:0 6px;border-radius:6px;font-size:12px}
+    .success{color:var(--accent-2)}
+
+    .footer{margin-top:14px;color:var(--muted);font-size:12px}
+    .switch{display:inline-flex;align-items:center;gap:6px}
+    .switch input{accent-color:var(--accent)}
+
+    .toast{position:fixed;bottom:16px;right:16px;background:var(--panel);border:1px solid rgba(255,255,255,.12);padding:10px 12px;border-radius:10px;opacity:0;transform:translateY(10px);transition:.25s}
+    .toast.show{opacity:1;transform:translateY(0)}
+  </style>
+</head>
+<body data-theme="dark">
+  <div class="wrap">
+    <header>
+      <div style="display:flex;align-items:center;gap:10px">
+        <h1>Adaptive Workout Plan Generator</h1>
+        <span class="tag">single‑file • offline • no tracking</span>
+      </div>
+      <div class="switch" title="Toggle theme">
+        <input id="themeToggle" type="checkbox" />
+        <label for="themeToggle">Light mode</label>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="panel">
+        <form id="controls">
+          <fieldset>
+            <legend>Basics</legend>
+            <div class="row">
+              <div class="col-4">
+                <label for="sex">Sex</label>
+                <select id="sex" required>
+                  <option value="female">Woman</option>
+                  <option value="male">Man</option>
+                  <option value="unspecified">Prefer not to say</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <label for="age">Age</label>
+                <input id="age" type="number" inputmode="numeric" min="13" max="90" value="19" />
+              </div>
+              <div class="col-4">
+                <label for="exp">Experience</label>
+                <select id="exp">
+                  <option>Beginner</option>
+                  <option>Intermediate</option>
+                  <option>Advanced</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label>Height</label>
+                <div class="inline">
+                  <select id="heightUnit">
+                    <option value="imperial">ft/in</option>
+                    <option value="metric">cm</option>
+                  </select>
+                  <input id="heightFt" type="number" min="3" max="7" placeholder="ft" value="5" />
+                  <input id="heightIn" type="number" min="0" max="11" placeholder="in" value="6" />
+                  <input id="heightCm" type="number" min="120" max="220" placeholder="cm" style="display:none" />
+                </div>
+              </div>
+              <div class="col-6">
+                <label>Weight</label>
+                <div class="inline">
+                  <select id="weightUnit">
+                    <option value="imperial">lb</option>
+                    <option value="metric">kg</option>
+                  </select>
+                  <input id="weight" type="number" min="70" max="400" value="150" />
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Goals & Schedule</legend>
+            <div class="row">
+              <div class="col-4">
+                <label for="goal">Primary goal</label>
+                <select id="goal">
+                  <option value="recomp">Recomp / general fitness</option>
+                  <option value="fatloss">Fat loss</option>
+                  <option value="muscle">Build muscle</option>
+                  <option value="strength">Strength</option>
+                  <option value="endurance">Endurance</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <label for="days">Days per week</label>
+                <select id="days">
+                  <option>1</option><option>2</option><option selected>3</option><option>4</option>
+                  <option>5</option><option>6</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <label for="minutes">Session length</label>
+                <select id="minutes">
+                  <option>30</option><option selected>45</option><option>60</option><option>75</option><option>90</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label for="split">Preferred split (optional)</label>
+                <select id="split">
+                  <option value="auto" selected>Auto decide</option>
+                  <option value="full">Full body</option>
+                  <option value="ul">Upper/Lower</option>
+                  <option value="ppl">Push/Pull/Legs</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label for="equipment">Equipment</label>
+                <select id="equipment">
+                  <option value="gym" selected>Gym (barbell, machines)</option>
+                  <option value="home">Home (DBs, bands)</option>
+                  <option value="minimal">Minimal (bodyweight/bands)</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Considerations</legend>
+            <div class="inline" id="limits">
+              <label class="chip"><input type="checkbox" value="shoulders">Shoulders</label>
+              <label class="chip"><input type="checkbox" value="elbows">Elbows</label>
+              <label class="chip"><input type="checkbox" value="wrists">Wrists</label>
+              <label class="chip"><input type="checkbox" value="back">Back</label>
+              <label class="chip"><input type="checkbox" value="knees">Knees</label>
+              <label class="chip"><input type="checkbox" value="ankles">Ankles</label>
+            </div>
+            <div class="hint">We’ll swap or remove aggravating movements if any of these are selected.</div>
+          </fieldset>
+
+          <div class="btn-row">
+            <button class="btn" type="button" id="generate">Generate plan</button>
+            <button class="btn btn-ghost" type="button" id="randomize">Randomize accessories</button>
+            <button class="btn btn-ghost" type="button" id="save">Save</button>
+            <button class="btn btn-ghost" type="button" id="share">Share link</button>
+            <button class="btn btn-ghost" type="button" id="print">Print</button>
+            <span class="hint">Tip: press <span class="kbd">G</span> to generate quickly.</span>
+          </div>
+        </form>
+      </section>
+
+      <section id="output" class="panel">
+        <div class="card">
+          <h3>👋 Start here</h3>
+          <p>Fill the form and hit <b>Generate plan</b>. We’ll build a day‑by‑day routine tailored to your goal, schedule, experience, equipment, and constraints. Plans include warm‑ups, sets/reps with RPE, conditioning, and mobility. You can save, print, and share a link that rebuilds the same plan later.</p>
+          <p class="hint">Nothing here is medical advice. If something hurts, skip it and pick the suggested alternative.</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">
+      <span>v1.0 • generated locally</span>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Saved</div>
+
+  <script>
+    // ---------- Utilities ----------
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+    const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+    const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
+    function cmFromInputs(){
+      const unit = $('#heightUnit').value;
+      if(unit==='metric') return Number($('#heightCm').value||170);
+      const ft = Number($('#heightFt').value||0), inch = Number($('#heightIn').value||0);
+      return Math.round(((ft*12)+inch)*2.54);
+    }
+    function kgFromInput(){
+      const unit = $('#weightUnit').value; const w = Number($('#weight').value||0);
+      return unit==='metric'? w : Math.round(w/2.20462);
+    }
+    function bmi(){
+      const h = cmFromInputs()/100, w = kgFromInput();
+      if(!h||!w) return 0; return w/(h*h);
+    }
+
+    function toast(msg){
+      const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+      setTimeout(()=>t.classList.remove('show'), 1600);
+    }
+
+    // ---------- Exercise Library ----------
+    // structure: { area: [ { name, type:'main'|'assist'|'core'|'cond', equipment:['gym'|'home'|'minimal'], avoid:['shoulders'..], alt:['...'] } ] }
+    const LIB = {
+      full: [
+        {name:'Back Squat',type:'main',equipment:['gym'],avoid:['knees','back'],alt:['Hack Squat','Leg Press','Box Squat']},
+        {name:'Front Squat',type:'main',equipment:['gym'],avoid:['knees','wrists','back'],alt:['Goblet Squat']},
+        {name:'Conventional Deadlift',type:'main',equipment:['gym'],avoid:['back'],alt:['Trap Bar Deadlift','Romanian Deadlift']},
+        {name:'Trap Bar Deadlift',type:'main',equipment:['gym'],avoid:[],alt:['Romanian Deadlift']},
+        {name:'Bench Press',type:'main',equipment:['gym'],avoid:['shoulders','wrists','elbows'],alt:['DB Bench','Push‑ups']},
+        {name:'Overhead Press',type:'main',equipment:['gym','home'],avoid:['shoulders','wrists','back'],alt:['Landmine Press','Incline DB Press']},
+        {name:'Hip Thrust',type:'main',equipment:['gym','home'],avoid:[],alt:['Glute Bridge']},
+        {name:'Pull‑up / Assisted',type:'main',equipment:['gym','home'],avoid:['elbows','shoulders','wrists'],alt:['Lat Pulldown','One‑arm Lat Pulldown']},
+        {name:'Row (Barbell or Cable)',type:'main',equipment:['gym','home'],avoid:['back','wrists','elbows'],alt:['Chest‑Supported Row','DB Row']},
+
+        // Accessories
+        {name:'DB Lunge',type:'assist',equipment:['gym','home'],avoid:['knees','ankles'],alt:['Split Squat','Step‑up']},
+        {name:'Leg Press',type:'assist',equipment:['gym'],avoid:['knees'],alt:['Hack Squat','Smith Squat']},
+        {name:'Romanian Deadlift',type:'assist',equipment:['gym','home'],avoid:['back'],alt:['Hip Hinge with DBs','Good Morning (light)']},
+        {name:'Lat Pulldown',type:'assist',equipment:['gym'],avoid:['shoulders','elbows'],alt:['Seated Row (neutral)']},
+        {name:'Cable Row',type:'assist',equipment:['gym'],avoid:['back','elbows','wrists'],alt:['Chest‑Supported Row']},
+        {name:'Incline DB Press',type:'assist',equipment:['gym','home'],avoid:['shoulders','wrists'],alt:['Push‑ups (elevated)']},
+        {name:'Lateral Raise',type:'assist',equipment:['gym','home'],avoid:['shoulders'],alt:['Cable Y‑raise (light)']},
+        {name:'Face Pull',type:'assist',equipment:['gym','home'],avoid:['shoulders','elbows'],alt:['Reverse Fly (light)']},
+        {name:'Triceps Pressdown',type:'assist',equipment:['gym'],avoid:['elbows','wrists'],alt:['Overhead Rope Extension','Close Push‑ups']},
+        {name:'DB Curl',type:'assist',equipment:['gym','home'],avoid:['wrists','elbows'],alt:['Hammer Curl']},
+        {name:'Hammer Curl',type:'assist',equipment:['gym','home'],avoid:['elbows'],alt:['Band Curl']},
+        {name:'Calf Raise',type:'assist',equipment:['gym','home'],avoid:['ankles'],alt:['Seated Calf Raise']},
+        {name:'Step‑up',type:'assist',equipment:['gym','home'],avoid:['knees','ankles'],alt:['Split Squat']},
+
+        // Core
+        {name:'Plank',type:'core',equipment:['gym','home','minimal'],avoid:[],alt:['Side Plank']},
+        {name:'Dead Bug',type:'core',equipment:['gym','home','minimal'],avoid:[],alt:['Bird Dog']},
+        {name:'Pallof Press',type:'core',equipment:['gym','home'],avoid:[],alt:['Side Plank']},
+        {name:'Hanging Knee Raise',type:'core',equipment:['gym'],avoid:['shoulders','wrists'],alt:['Captains Chair Knee Raise']},
+
+        // Conditioning
+        {name:'Bike Erg (zone 2)',type:'cond',equipment:['gym','home'],avoid:[],alt:['Fast Walk']},
+        {name:'Row Erg (steady)',type:'cond',equipment:['gym'],avoid:['back'],alt:['Bike Erg']},
+        {name:'Incline Tread Walk',type:'cond',equipment:['gym','home'],avoid:['ankles','knees'],alt:['Flat Walk']},
+        {name:'Jump Rope (light)',type:'cond',equipment:['gym','home','minimal'],avoid:['ankles','knees'],alt:['Shadow Jump']},
+        {name:'Outdoor Fast Walk',type:'cond',equipment:['minimal','home','gym'],avoid:[],alt:['Bike']}
+      ]
+    };
+
+    // ---------- Plan logic ----------
+    function determineSplit(days, pref){
+      if(pref!== 'auto') return pref;
+      if(days<=2) return 'full';
+      if(days===3) return 'ppl';
+      if(days===4) return 'ul';
+      if(days>=5) return 'ppl';
+      return 'full';
+    }
+
+    function volumeProfile({sex, goal, exp, age}){
+      // Base sets per main lift and accessory; adjust by sex, goal, experience, age
+      let main = 3, assist = 3, core = 2;
+      if(exp==='Beginner'){ main=3; assist=2; core=2; }
+      if(exp==='Intermediate'){ main=4; assist=3; core=2; }
+      if(exp==='Advanced'){ main=5; assist=3; core=3; }
+      if(sex==='female'){ assist += 1; } // generally better fatigue resistance in higher rep ranges
+      if(goal==='strength'){ main += 1; }
+      if(goal==='fatloss'){ assist += 0; }
+      if(age>=40){ assist -= 1; core += 1; }
+      main = clamp(main,2,6); assist = clamp(assist,1,5); core = clamp(core,1,4);
+      return { mainSets: main, assistSets: assist, coreSets: core };
+    }
+
+    function repScheme({goal, sex}){
+      let main = '4x4–6 @ RPE 7–8';
+      let assist = '3x8–12 @ RPE 7';
+      let core = '2–3 sets';
+      if(goal==='strength'){ main = '5x3–5 @ RPE 8'; assist = '3x6–10 @ RPE 7–8';}
+      if(goal==='muscle' || goal==='recomp'){ main = '4x5–8 @ RPE 7–8'; assist = '3–4x10–15 @ RPE 7–8';}
+      if(goal==='fatloss'){ main = '3–4x5–8 @ RPE 7'; assist = '3x10–15 @ RPE 7, short rests';}
+      if(goal==='endurance'){ main = '3x8–10 @ RPE 7'; assist = '2–3x12–20 @ RPE 6–7';}
+      if(sex==='female'){ assist = assist.replace('10–15','12–15'); }
+      return {main, assist, core};
+    }
+
+    function restTimes({goal, sex}){
+      let main=120, assist=90; // seconds
+      if(goal==='strength'){ main=180; assist=120; }
+      if(goal==='fatloss' || goal==='endurance'){ main=90; assist=60; }
+      if(sex==='female'){ assist = Math.max(60, assist-15); }
+      return {main, assist};
+    }
+
+    function cardioPrescription({goal, minutes, bmiVal}){
+      let sessions = 2, dur = 20, note = 'Zone 2 conversational pace';
+      if(goal==='fatloss'){ sessions = 3; dur = 25; }
+      if(goal==='endurance'){ sessions = 4; dur = 30; note = 'Mostly zone 2, finish with 4x30s pickups'; }
+      if(minutes>=75){ dur += 5; }
+      if(bmiVal>=30){ note += ' • prefer low‑impact (bike/elliptical/walk)'; }
+      return {sessions, dur, note};
+    }
+
+    function pickExercises({split, equipment, limits, sex}){
+      const pool = LIB.full.filter(e=>e.equipment.includes(equipment) || e.equipment.includes('minimal'))
+                           .filter(e=>!e.avoid.some(a=>limits.includes(a)));
+      const byType = t => pool.filter(e=>e.type===t);
+      const main = byType('main');
+      const assist = byType('assist');
+      const core = byType('core');
+      const cond = byType('cond');
+
+      function safePick(list, n){
+        const out = []; const bag = [...list];
+        while(out.length<n && bag.length){ const i = Math.floor(Math.random()*bag.length); out.push(bag.splice(i,1)[0]); }
+        return out;
+      }
+
+      const days = [];
+      if(split==='full'){
+        days.push({tag:'Full Body A', mains: safePick(main,2), assists: safePick(assist,3)});
+        days.push({tag:'Full Body B', mains: safePick(main,2), assists: safePick(assist,3)});
+      }
+      if(split==='ul'){
+        days.push({tag:'Upper A', mains: safePick(main.filter(x=>/Press|Row|Pull|Bench/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Press|Row|Pull|Curl|Triceps|Lateral|Face/i.test(x.name)),3)});
+        days.push({tag:'Lower A', mains: safePick(main.filter(x=>/Squat|Deadlift|Thrust/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Lunge|Romanian|Leg|Calf|Step/i.test(x.name)),3)});
+        days.push({tag:'Upper B', mains: safePick(main.filter(x=>/Press|Row|Pull|Bench/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Press|Row|Pull|Curl|Triceps|Lateral|Face/i.test(x.name)),3)});
+        days.push({tag:'Lower B', mains: safePick(main.filter(x=>/Squat|Deadlift|Thrust/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Lunge|Romanian|Leg|Calf|Step/i.test(x.name)),3)});
+      }
+      if(split==='ppl'){
+        days.push({tag:'Push', mains: safePick(main.filter(x=>/Press|Bench/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Press|Triceps|Lateral/i.test(x.name)),3)});
+        days.push({tag:'Pull', mains: safePick(main.filter(x=>/Row|Pull|Deadlift/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Row|Curl|Face/i.test(x.name)),3)});
+        days.push({tag:'Legs', mains: safePick(main.filter(x=>/Squat|Deadlift|Thrust/i.test(x.name)),2), assists: safePick(assist.filter(x=>/Lunge|Romanian|Leg|Calf|Step/i.test(x.name)),3)});
+      }
+
+      // sex‑specific bias: ensure glute emphasis present for female, bench bias for male
+      if(sex==='female'){
+        days.forEach(d=>{
+          if(!d.mains.some(m=>/Thrust|Glute/i.test(m.name))){
+            const candidate = pool.find(m=>m.type==='main' && /Thrust|Glute/i.test(m.name));
+            if(candidate) d.mains[0] = candidate;
+          }
+        });
+      }
+      if(sex==='male'){
+        days.forEach(d=>{
+          if(/Push|Upper/.test(d.tag) && !d.mains.some(m=>/Bench/i.test(m.name))){
+            const bench = pool.find(m=>m.type==='main' && /Bench/i.test(m.name));
+            if(bench) d.mains[0] = bench;
+          }
+        });
+      }
+
+      return {days, core: core, cond: cond};
+    }
+
+    function warmupBlock(tag){
+      return [
+        '5–8 min easy cardio (bike/row/walk)',
+        'Dynamic: leg swings • band pull‑aparts • thoracic rotations',
+        `2 ramp sets for first main lift of ${tag}`
+      ];
+    }
+
+    function coolDownBlock(goal){
+      const out = ['90–120s easy breathing, hands on ribs','Light stretches: hip flexors, pecs, lats (optional)'];
+      if(goal==='endurance') out.unshift('3–5 min easy spin/walk');
+      return out;
+    }
+
+    // ---------- Render ----------
+    function renderPlan(cfg){
+      const out = $('#output'); out.innerHTML = '';
+
+      const top = document.createElement('div'); top.className = 'summary';
+      const b = bmi();
+      const {mainSets, assistSets, coreSets} = volumeProfile(cfg);
+      const reps = repScheme(cfg); const rest = restTimes(cfg);
+      const cardio = cardioPrescription({goal: cfg.goal, minutes: Number(cfg.minutes), bmiVal: b});
+
+      top.innerHTML = `
+        <div class="card"><h3>Profile</h3>
+          <div class="ex"><span>Sex</span><span class="badge">${cfg.sex}</span></div>
+          <div class="ex"><span>Age</span><span>${cfg.age}</span></div>
+          <div class="ex"><span>Height</span><span>${cmFromInputs()} cm</span></div>
+          <div class="ex"><span>Weight</span><span>${kgFromInput()} kg</span></div>
+          <div class="ex"><span>BMI (rough)</span><span>${b?b.toFixed(1):'—'}</span></div>
+        </div>
+        <div class="card"><h3>Training knobs</h3>
+          <div class="ex"><span>Goal</span><span class="badge">${cfg.goal}</span></div>
+          <div class="ex"><span>Split</span><span>${cfg.split.toUpperCase()}</span></div>
+          <div class="ex"><span>Days / week</span><span>${cfg.days}</span></div>
+          <div class="ex"><span>Session length</span><span>${cfg.minutes} min</span></div>
+          <div class="ex"><span>Equipment</span><span>${cfg.equipment}</span></div>
+          <div class="ex"><span>Limits</span><span>${cfg.limits.length?cfg.limits.join(', '):'none'}</span></div>
+        </div>
+        <div class="card"><h3>Prescriptions</h3>
+          <div class="ex"><span>Main lifts</span><span>${reps.main} • rest ${rest.main}s</span></div>
+          <div class="ex"><span>Accessories</span><span>${reps.assist} • rest ${rest.assist}s</span></div>
+          <div class="ex"><span>Core</span><span>${coreSets} sets</span></div>
+          <div class="ex"><span>Conditioning</span><span>${cardio.sessions}×${cardio.dur} min • ${cardio.note}</span></div>
+        </div>
+      `;
+      out.appendChild(top);
+
+      // build days
+      const {days, core, cond} = pickExercises(cfg);
+      const n = Number(cfg.days);
+      const schedule = [];
+      for(let i=0;i<n;i++){
+        const template = days[i % days.length];
+        schedule.push(JSON.parse(JSON.stringify(template)));
+      }
+
+      schedule.forEach((d, idx)=>{
+        const card = document.createElement('div'); card.className = 'card';
+        const title = `Day ${idx+1} • ${d.tag}`;
+        const warm = warmupBlock(d.tag);
+        const corePick = pick(core);
+        const condPick = pick(cond);
+
+        const mSets = volumeProfile(cfg).mainSets;
+        const aSets = volumeProfile(cfg).assistSets;
+        const cSets = volumeProfile(cfg).coreSets;
+
+        card.innerHTML = `
+          <h3 class="day">${title}</h3>
+          <div class="ex"><span>Warm‑up</span><span>${warm.join(' • ')}</span></div>
+          ${d.mains.map(m=>`<div class="ex"><span>${m.name}</span><span>${mSets} sets • ${repScheme(cfg).main}</span></div>`).join('')}
+          ${d.assists.map(a=>`<div class="ex"><span>${a.name}</span><span>${aSets} sets • ${repScheme(cfg).assist}</span></div>`).join('')}
+          <div class="ex"><span>${corePick.name}</span><span>${cSets} sets • ${repScheme(cfg).core}</span></div>
+          <div class="ex"><span>Conditioning</span><span>${condPick.name} • ${cardioPrescription({goal: cfg.goal, minutes: Number(cfg.minutes), bmiVal: bmi()}).dur} min</span></div>
+          <div class="ex"><span>Cool‑down</span><span>${coolDownBlock(cfg.goal).join(' • ')}</span></div>
+          <div class="hint">Notes: keep last set near target RPE. If technique breaks, reduce load or reps. Swap to suggested alternatives if a movement irritates a joint.</div>
+        `;
+        out.appendChild(card);
+      });
+
+      const extra = document.createElement('div'); extra.className='card';
+      const kg = kgFromInput();
+      const protein = Math.round(kg * (cfg.goal==='muscle' || cfg.goal==='strength' ? 1.8 : 1.6));
+      const water = Math.round(kg * 35); // ml
+
+      extra.innerHTML = `
+        <h3>Extras</h3>
+        <div class="ex"><span>Protein target</span><span>${protein} g/day</span></div>
+        <div class="ex"><span>Hydration</span><span>${water} ml/day (base)</span></div>
+        <div class="ex"><span>Progression</span><span>Wk1 baseline • Wk2 +1 rep where possible • Wk3 +2.5–5% load • Wk4 deload at ~70%</span></div>
+        <div class="ex"><span>Auto‑regulation</span><span>Use RPE: stop 2–3 reps shy of failure on most sets</span></div>
+        <div class="ex"><span>Recovery</span><span>Sleep 7.5–9 h • easy walks on rest days</span></div>
+      `;
+      out.appendChild(extra);
+    }
+
+    function collectConfig(){
+      const limits = $$('#limits input:checked').map(i=>i.value);
+      const cfg = {
+        sex: $('#sex').value,
+        age: Number($('#age').value||18),
+        exp: $('#exp').value,
+        goal: $('#goal').value,
+        days: Number($('#days').value),
+        minutes: Number($('#minutes').value),
+        equipment: $('#equipment').value,
+        split: determineSplit(Number($('#days').value), $('#split').value),
+        limits
+      };
+      return cfg;
+    }
+
+    // ---------- Actions ----------
+    function saveState(cfg){
+      const state = { cfg, inputs:{
+        heightUnit: $('#heightUnit').value,
+        heightFt: $('#heightFt').value,
+        heightIn: $('#heightIn').value,
+        heightCm: $('#heightCm').value,
+        weightUnit: $('#weightUnit').value,
+        weight: $('#weight').value,
+      }};
+      localStorage.setItem('workout-generator', JSON.stringify(state));
+    }
+    function loadState(){
+      try{ const raw = localStorage.getItem('workout-generator'); if(!raw) return;
+        const state = JSON.parse(raw);
+        if(state.inputs){
+          $('#heightUnit').value = state.inputs.heightUnit||'imperial';
+          $('#heightFt').value = state.inputs.heightFt||'5';
+          $('#heightIn').value = state.inputs.heightIn||'6';
+          $('#heightCm').value = state.inputs.heightCm||'';
+          $('#weightUnit').value = state.inputs.weightUnit||'imperial';
+          $('#weight').value = state.inputs.weight||'150';
+          onUnitChange();
+        }
+        if(state.cfg){
+          $('#sex').value = state.cfg.sex||'female';
+          $('#age').value = state.cfg.age||19;
+          $('#exp').value = state.cfg.exp||'Beginner';
+          $('#goal').value = state.cfg.goal||'recomp';
+          $('#days').value = state.cfg.days||3;
+          $('#minutes').value = state.cfg.minutes||45;
+          $('#equipment').value = state.cfg.equipment||'gym';
+          $('#split').value = state.cfg.split||'auto';
+          // limits
+          $$('#limits input').forEach(i=>i.checked = state.cfg.limits?.includes(i.value));
+        }
+      }catch(e){ console.warn('loadState', e); }
+    }
+
+    function exportLink(cfg){
+      const payload = {cfg, values:{
+        hU: $('#heightUnit').value, hF: $('#heightFt').value, hI: $('#heightIn').value, hC: $('#heightCm').value,
+        wU: $('#weightUnit').value, w: $('#weight').value
+      }};
+      const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+      return location.origin + location.pathname + '#'+ b64;
+    }
+
+    function importFromHash(){
+      if(location.hash.length<2) return null;
+      try{
+        const json = decodeURIComponent(escape(atob(location.hash.slice(1))));
+        const obj = JSON.parse(json);
+        if(obj?.values){
+          $('#heightUnit').value = obj.values.hU; $('#heightFt').value = obj.values.hF; $('#heightIn').value = obj.values.hI; $('#heightCm').value = obj.values.hC;
+          $('#weightUnit').value = obj.values.wU; $('#weight').value = obj.values.w;
+          onUnitChange();
+        }
+        if(obj?.cfg){
+          $('#sex').value = obj.cfg.sex; $('#age').value = obj.cfg.age; $('#exp').value = obj.cfg.exp; $('#goal').value = obj.cfg.goal; $('#days').value = obj.cfg.days;
+          $('#minutes').value = obj.cfg.minutes; $('#equipment').value = obj.cfg.equipment; $('#split').value = obj.cfg.split;
+          $$('#limits input').forEach(i=>i.checked = obj.cfg.limits?.includes(i.value));
+          renderPlan(obj.cfg);
+        }
+        toast('Loaded from link');
+      }catch(e){ console.warn('import fail', e); }
+    }
+
+    function onUnitChange(){
+      const hu = $('#heightUnit').value;
+      if(hu==='metric'){
+        $('#heightCm').style.display='block'; $('#heightFt').style.display='none'; $('#heightIn').style.display='none';
+      } else {
+        $('#heightCm').style.display='none'; $('#heightFt').style.display='block'; $('#heightIn').style.display='block';
+      }
+      const wu = $('#weightUnit').value; $('#weight').min = (wu==='metric'? 32: 70); $('#weight').max=(wu==='metric'? 180: 400);
+    }
+
+    // ---------- Events ----------
+    $('#generate').addEventListener('click',()=>{
+      const cfg = collectConfig();
+      renderPlan(cfg); saveState(cfg); toast('Plan generated');
+    });
+    $('#randomize').addEventListener('click',()=>{
+      const cfg = collectConfig(); renderPlan(cfg); toast('Randomized');
+    });
+    $('#save').addEventListener('click',()=>{ const cfg = collectConfig(); saveState(cfg); toast('Saved'); });
+    $('#share').addEventListener('click',()=>{ const link = exportLink(collectConfig()); navigator.clipboard.writeText(link).then(()=>toast('Share link copied')); });
+    $('#print').addEventListener('click',()=>window.print());
+    document.addEventListener('keydown',e=>{ if(e.key.toLowerCase()==='g'){ $('#generate').click(); }});
+
+    $('#heightUnit').addEventListener('change', onUnitChange);
+    $('#weightUnit').addEventListener('change', onUnitChange);
+
+    // Theme toggle
+    const themeToggle = $('#themeToggle');
+    function applyTheme(){ document.body.setAttribute('data-theme', themeToggle.checked? 'light':'dark'); }
+    themeToggle.addEventListener('change',()=>{ applyTheme(); localStorage.setItem('wg-theme', themeToggle.checked?'light':'dark'); });
+
+    // Init
+    (function init(){
+      const savedTheme = localStorage.getItem('wg-theme');
+      themeToggle.checked = savedTheme==='light'; applyTheme();
+      onUnitChange();
+      loadState();
+      importFromHash();
+    })();
+  </script>
+</body>
+</html>
